@@ -1,91 +1,132 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenerativeAI } from "@google/generative-ai";
+import { generateMockIdea } from "./mockData.js";
 
-const apiKey = import.meta.env.VITE_GEMINI_KEY;
+const apiKey = import.meta.env?.VITE_GEMINI_KEY;
+const USE_MOCK_DATA = import.meta.env?.VITE_USE_MOCK === "true" || !apiKey;
 
-const genAI = apiKey ? new GoogleGenerativeAI(apiKey) : null;
+// Prioritized list of stable models
+const MODEL_CANDIDATES = [
+  "gemini-1.5-flash", 
+  "gemini-1.5-pro",
+  "gemini-2.0-flash-exp"
+];
 
-export async function generateIdea(answers) {
-  if (!genAI) {
-    // Fallback mock idea when Gemini is not configured,
-    // so the app still works during development.
-    return {
-      businessName: `${answers.skill || 'Your skill'} Micro Studio`,
-      tagline: 'A lean micro-business you can run from anywhere.',
-      idea:
-        'Use your existing skills to offer focused, high-value services to a small group of customers in India. Start with a simple offer, test it with real people, and grow from there.',
-      targetCustomers: [
-        'Busy young professionals in your city',
-        'College students preparing for careers',
-        'Local small business owners',
-        'Online customers who value personal attention',
-      ],
-      pricing: {
-        perUnit: '₹499 per session',
-        weeklyPlan: '₹1,999 for a weekly bundle',
-        monthlyPlan: '₹5,999 for a monthly membership',
-      },
-      materials: [
-        'Smartphone with internet access',
-        'Basic notebook or planning tool',
-        'Free design and document tools (Canva, Google Docs, etc.)',
-        'Simple booking + payment setup (UPI, WhatsApp, or Google Form)',
-      ],
-      startupChecklist: [
-        'Define one clear service you will offer',
-        'Write a simple 1-line pitch for your offer',
-        'Create a basic price list and welcome message',
-        'Set up a WhatsApp or Instagram account for the business',
-        'Contact 5–10 people in your network to test the offer',
-        'Collect feedback and adjust your pricing or offer',
-        'Post your first 3 pieces of content to attract customers',
-      ],
-      startupCost: 'Low (under ₹2,000 using tools you already have)',
-      profitPerSale: '₹300–₹700 depending on your pricing',
-      breakEvenSales: '5–10 sales to cover basic setup costs',
-      weeklyTimeCommitment: answers.hours || '5–10 hours per week',
-      instaBio:
-        'Helping busy people in India get results faster with simple, done-for-you services. DM to start your first project today 🚀',
-      whatsappPitch:
-        'Hey! I just launched a small micro-business using my skills to help people like you. I’m offering a simple service to get you quick results without much effort on your side. Would you like to see a short 2–3 point plan of how I can help you this week?',
-    };
-  }
+const SECTION_ORDER = [
+  "businessName", "tagline", "idea", "targetCustomers", "pricing",
+  "competitorLandscape", "firstWeekPlan", "platformStrategy",
+  "localMarketingTips", "risksAndMitigation", "materials",
+  "startupChecklist", "startupCost", "profitPerSale",
+  "breakEvenSales", "weeklyTimeCommitment", "instaBio", "whatsappPitch"
+];
 
-  const prompt = `
-  A user wants to start a micro-business in India.
-  Skill: ${answers.skill}, Confidence: ${answers.confidence},
-  Hours/week: ${answers.hours}, Tools: ${answers.tools},
-  Budget: ${answers.budget}, Customers: ${answers.customerType}
-  Return ONLY raw JSON with: businessName, tagline, idea,
-  targetCustomers (array of 4), pricing (object: perUnit/weeklyPlan/monthlyPlan),
-  materials (array), startupChecklist (array of 7),
-  startupCost, profitPerSale, breakEvenSales,
-  weeklyTimeCommitment, instaBio, whatsappPitch
+function buildPrompt(answers) {
+  const city = answers.city || "your city";
+  const skill = answers.skill || "your skill";
+  const budget = answers.budget || "your budget";
+  
+  return `
+    You are a startup strategist for micro-businesses in India.
+    Create a specific micro business plan for:
+    Skill: ${skill} | Budget: ${budget} | City: ${city}
+    
+    Return ONLY valid JSON with these keys: ${SECTION_ORDER.join(", ")}.
+    All currency in INR. Be extremely specific.
   `;
-
-  const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
-  const result = await model.generateContent(prompt);
-  let text = result?.response?.text() ?? '';
-
-  // Strip common markdown fences / labels
-  text = text
-    .replace(/```json/gi, '')
-    .replace(/```/g, '')
-    .replace(/^\s*json\s*/i, '')
-    .trim();
-
-  // Try to extract the JSON object between the first { and last }
-  const firstBrace = text.indexOf('{');
-  const lastBrace = text.lastIndexOf('}');
-  if (firstBrace !== -1 && lastBrace !== -1) {
-    text = text.slice(firstBrace, lastBrace + 1);
-  }
-
-  try {
-    const parsed = JSON.parse(text);
-    return parsed;
-  } catch (err) {
-    console.error('Failed to parse Gemini JSON:', err, text);
-    throw new Error('Could not parse idea from Gemini response');
-  }
 }
 
+// Helper to extract JSON from potential markdown wrappers
+function cleanJsonString(str) {
+  return str.replace(/```json|```/g, "").trim();
+}
+
+export async function streamIdea(answers, { onSection, onDone, onError } = {}) {
+  if (!apiKey) {
+    onError?.(new Error("API Key missing"));
+    return;
+  }
+
+  const genAI = new GoogleGenerativeAI(apiKey);
+  let lastError = null;
+
+  // Instead of testing all models first, try them one by one for the ACTUAL task
+  for (const modelName of MODEL_CANDIDATES) {
+    try {
+      const model = genAI.getGenerativeModel({
+        model: modelName,
+        generationConfig: { temperature: 0.7, response_mime_type: "application/json" }
+      });
+
+      const result = await model.generateContentStream(buildPrompt(answers));
+      
+      let fullText = "";
+      const emittedKeys = new Set();
+
+      for await (const chunk of result.stream) {
+        const chunkText = chunk.text();
+        fullText += chunkText;
+
+        // Try to parse partial JSON
+        try {
+          const cleaned = cleanJsonString(fullText);
+          // Simple regex to find "key": "value" or "key": {...}
+          SECTION_ORDER.forEach(key => {
+            if (!emittedKeys.has(key) && cleaned.includes(`"${key}"`)) {
+              // Extract the value if the next key exists or JSON ends
+              try {
+                const tempObj = JSON.parse(cleaned + (cleaned.endsWith("}") ? "" : "}"));
+                if (tempObj[key]) {
+                  onSection?.(key, tempObj[key]);
+                  emittedKeys.add(key);
+                }
+              } catch (parseErr) {
+                // Ignore partial parsing errors during stream
+              }
+            }
+          });
+        } catch (e) {
+          // Ignore partial parsing errors during stream
+        }
+      }
+
+      const cleaned = cleanJsonString(fullText);
+      if (!cleaned) {
+        throw new Error("Empty response from model");
+      }
+
+      const finalContent = JSON.parse(cleaned);
+      onDone?.(finalContent);
+      return; // Success! Exit the loop.
+
+    } catch (err) {
+      console.warn(`Model ${modelName} failed, trying next...`, err);
+      lastError = err;
+      continue; 
+    }
+  }
+
+  onError?.(lastError || new Error("All models failed"));
+}
+
+// Simple wrapper for non-streaming usage
+export async function generateIdea(answers) {
+  // Use mock data if API key is missing or mock mode is enabled
+  if (USE_MOCK_DATA) {
+    console.log("Using mock data (API unavailable or mock mode enabled)");
+    // Simulate API delay
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    return generateMockIdea(answers);
+  }
+
+  return new Promise((resolve, reject) => {
+    streamIdea(answers, {
+      onDone: (idea) => resolve(idea),
+      onError: (error) => {
+        console.warn("API failed, falling back to mock data:", error);
+        // Fallback to mock data on error
+        setTimeout(() => {
+          resolve(generateMockIdea(answers));
+        }, 500);
+      }
+    });
+  });
+}

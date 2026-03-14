@@ -8,9 +8,19 @@ const firebaseConfig = {
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
 };
 
-const app = initializeApp(firebaseConfig);
+let app, auth, db, provider;
 
-export const auth = getAuth(app);
-export const db = getFirestore(app);
-export const provider = new GoogleAuthProvider();
+try {
+  if (firebaseConfig.apiKey && firebaseConfig.authDomain && firebaseConfig.projectId) {
+    app = initializeApp(firebaseConfig);
+    auth = getAuth(app);
+    db = getFirestore(app);
+    provider = new GoogleAuthProvider();
+  } else {
+    console.warn('Firebase config incomplete. Firebase features will be disabled.');
+  }
+} catch (error) {
+  console.error('Firebase initialization failed:', error);
+}
 
+export { auth, db, provider };

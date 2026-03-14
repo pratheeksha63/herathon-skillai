@@ -19,7 +19,14 @@ function Loading() {
       return;
     }
 
-    const answers = JSON.parse(raw);
+    let answers;
+    try {
+      answers = JSON.parse(raw);
+    } catch (error) {
+      console.error('Error parsing answers:', error);
+      navigate('/onboarding', { replace: true });
+      return;
+    }
 
     let isMounted = true;
 

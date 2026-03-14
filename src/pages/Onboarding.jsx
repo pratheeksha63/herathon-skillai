@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-const TOTAL_QUESTIONS = 6;
+const TOTAL_QUESTIONS = 7;
 
 function Onboarding() {
   const navigate = useNavigate();
@@ -13,6 +13,7 @@ function Onboarding() {
     tools: '',
     budget: '',
     customerType: '',
+    city: '',
   });
 
   const progress = (step / TOTAL_QUESTIONS) * 100;
@@ -167,6 +168,21 @@ function Onboarding() {
             </div>
           </>
         );
+      case 7:
+        return (
+          <>
+            <h2 className="text-2xl font-display text-white mb-4">
+              Which city are you in?
+            </h2>
+            <input
+              type="text"
+              className="w-full mt-2 rounded-2xl bg-card border border-white/10 px-4 py-3 text-gray-100 focus:outline-none focus:ring-2 focus:ring-accent"
+              placeholder="e.g. Mumbai, Delhi, Bangalore"
+              value={answers.city}
+              onChange={handleTextChange('city')}
+            />
+          </>
+        );
       default:
         return null;
     }
@@ -186,6 +202,8 @@ function Onboarding() {
         return Boolean(answers.budget);
       case 6:
         return Boolean(answers.customerType);
+      case 7:
+        return Boolean(answers.city.trim());
       default:
         return true;
     }

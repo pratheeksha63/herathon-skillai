@@ -1,22 +1,28 @@
-import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 function Results() {
   const navigate = useNavigate();
   const [idea, setIdea] = useState(null);
   const [checked, setChecked] = useState(() => new Set());
-  const [copied, setCopied] = useState('');
+  const [copied, setCopied] = useState("");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [activeTab, setActiveTab] = useState('overview');
+  const [activeTab, setActiveTab] = useState("overview");
 
   useEffect(() => {
-    const raw = localStorage.getItem('skillaunch_idea');
-    if (!raw) { navigate('/onboarding', { replace: true }); return; }
+    const raw = localStorage.getItem("skillaunch_idea") || "{}";
+
     try {
-      setIdea(JSON.parse(raw));
-    } catch {
-      navigate('/onboarding', { replace: true });
+      const parsed = JSON.parse(raw);
+      if (!parsed.businessName) {
+        navigate("/onboarding", { replace: true });
+      } else {
+        setIdea(parsed);
+      }
+    } catch (error) {
+      console.error("Error parsing idea data:", error);
+      navigate("/onboarding", { replace: true });
     }
   }, [navigate]);
 
@@ -28,125 +34,164 @@ function Results() {
     });
   };
 
-  const copyText = (text, label) => {
-    navigator.clipboard.writeText(text || '');
-    setCopied(label);
-    setTimeout(() => setCopied(''), 2000);
+  const copyText = async (text, label) => {
+    try {
+      await navigator.clipboard.writeText(text || "");
+      setCopied(label);
+      setTimeout(() => setCopied(""), 2000);
+    } catch (error) {
+      console.error("Failed to copy text:", error);
+    }
   };
 
   const handleSave = () => {
     setSaving(true);
-    setTimeout(() => { setSaving(false); setSaved(true); }, 1000);
+    setTimeout(() => {
+      setSaving(false);
+      setSaved(true);
+    }, 1000);
   };
 
   if (!idea) {
     return (
       <main className="min-h-screen flex items-center justify-center bg-[#0a0a14]">
-        <div className="text-center">
-          <div className="text-5xl mb-4 animate-spin">⚙️</div>
-          <p className="text-white/60">Loading your idea...</p>
-        </div>
+        <p className="text-white/60">Loading your idea...</p>
       </main>
     );
   }
 
   const {
-    businessName, tagline, idea: description,
-    targetCustomers = [], pricing = {}, materials = [],
-    startupChecklist = [], startupCost, profitPerSale,
-    breakEvenSales, weeklyTimeCommitment, instaBio, whatsappPitch,
+    businessName,
+    tagline,
+    idea: description,
+    targetCustomers = [],
+    pricing = {},
+    materials = [],
+    startupChecklist = [],
+    startupCost,
+    profitPerSale,
+    breakEvenSales,
+    weeklyTimeCommitment,
+    instaBio,
+    whatsappPitch,
+    competitorLandscape,
+    firstWeekPlan = {},
+    localMarketingTips = []
   } = idea;
 
-  const checklistProgress = Math.round((checked.size / (startupChecklist.length || 1)) * 100);
-  const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(whatsappPitch || '')}`;
+  const checklistProgress = Math.round(
+    (checked.size / (startupChecklist.length || 1)) * 100
+  );
 
-  const tabs = ['overview', 'financials', 'checklist', 'brand kit'];
+  const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(
+    whatsappPitch || ""
+  )}`;
+
+  const tabs = ["overview", "financials", "checklist", "brand kit"];
 
   return (
     <main className="min-h-screen bg-[#0a0a14] px-4 py-8">
       <div className="max-w-4xl mx-auto space-y-6">
+        {/* HERO */}
+        <div className="bg-[#1a1a2e] border border-white/10 rounded-3xl p-8">
+          <span className="px-3 py-1 rounded-full bg-orange-500/20 text-orange-400 text-xs font-semibold uppercase">
+            ✨ Your Business Idea
+          </span>
 
-        {/* ── HERO HEADER ── */}
-        <div className="relative rounded-3xl overflow-hidden bg-[#1a1a2e] border border-white/10 p-8">
-          <div className="absolute top-0 right-0 w-64 h-64 rounded-full bg-orange-500/5 -translate-y-1/2 translate-x-1/2 pointer-events-none" />
-          <div className="absolute bottom-0 left-0 w-48 h-48 rounded-full bg-orange-500/5 translate-y-1/2 -translate-x-1/2 pointer-events-none" />
-          <div className="relative">
-            <div className="flex items-center gap-2 mb-3">
-              <span className="px-3 py-1 rounded-full bg-orange-500/20 text-orange-400 text-xs font-semibold tracking-wider uppercase">
-                ✨ Your Business Idea
-              </span>
-            </div>
-            <h1 style={{ fontFamily: 'Georgia, serif' }}
-              className="text-4xl md:text-5xl font-bold text-white mb-2 leading-tight">
-              {businessName}
-            </h1>
-            <p className="text-orange-400 text-lg italic mb-6">{tagline}</p>
-            <p className="text-white/70 text-base leading-relaxed max-w-2xl border-l-2 border-orange-500 pl-4">
-              {description}
-            </p>
-          </div>
+          <h1
+            style={{ fontFamily: "Georgia, serif" }}
+            className="text-4xl font-bold text-white mt-3"
+          >
+            {businessName}
+          </h1>
+
+          <p className="text-orange-400 italic mt-2">{tagline}</p>
+
+          <p className="text-white/70 mt-5 border-l-2 border-orange-500 pl-4">
+            {description}
+          </p>
         </div>
 
-        {/* ── STAT CARDS ── */}
+        {/* STAT CARDS */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {[
-            { icon: '💰', label: 'Startup Cost', value: `₹${Number(startupCost).toLocaleString('en-IN')}`, color: 'text-orange-400' },
-            { icon: '📈', label: 'Profit / Sale', value: `₹${Number(profitPerSale).toLocaleString('en-IN')}`, color: 'text-green-400' },
-            { icon: '🎯', label: 'Break-even', value: `${breakEvenSales} sales`, color: 'text-blue-400' },
-            { icon: '⏱️', label: 'Time / week', value: weeklyTimeCommitment, color: 'text-purple-400' },
+            { icon: "💰", label: "Startup Cost", value: startupCost },
+            { icon: "📈", label: "Profit / Sale", value: profitPerSale },
+            { icon: "🎯", label: "Break-even", value: `${breakEvenSales} sales` },
+            { icon: "⏱️", label: "Time / week", value: weeklyTimeCommitment }
           ].map((s) => (
-            <div key={s.label} className="bg-[#1a1a2e] border border-white/10 rounded-2xl p-4 text-center hover:border-orange-500/30 transition-all">
-              <div className="text-2xl mb-2">{s.icon}</div>
-              <div className={`text-xl font-bold ${s.color}`}>{s.value}</div>
+            <div
+              key={s.label}
+              className="bg-[#1a1a2e] border border-white/10 rounded-xl p-4 text-center"
+            >
+              <div className="text-2xl">{s.icon}</div>
+              <div className="text-lg text-orange-400 font-bold mt-1">
+                {s.value || "—"}
+              </div>
               <div className="text-white/40 text-xs mt-1">{s.label}</div>
             </div>
           ))}
         </div>
 
-        {/* ── TABS ── */}
-        <div className="flex gap-2 overflow-x-auto pb-1">
+        {/* TABS */}
+        <div className="flex gap-2">
           {tabs.map((tab) => (
-            <button key={tab} onClick={() => setActiveTab(tab)}
-              className={`px-5 py-2 rounded-full text-sm font-semibold whitespace-nowrap transition-all capitalize
-                ${activeTab === tab
-                  ? 'bg-orange-500 text-white'
-                  : 'bg-[#1a1a2e] text-white/50 border border-white/10 hover:border-orange-500/40'}`}>
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`px-4 py-2 rounded-full text-sm capitalize ${
+                activeTab === tab
+                  ? "bg-orange-500 text-white"
+                  : "bg-[#1a1a2e] text-white/60 border border-white/10"
+              }`}
+            >
               {tab}
             </button>
           ))}
         </div>
 
-        {/* ── TAB: OVERVIEW ── */}
-        {activeTab === 'overview' && (
+        {/* OVERVIEW */}
+        {activeTab === "overview" && (
           <div className="space-y-4">
-
             {/* Target Customers */}
-            <div className="bg-[#1a1a2e] border border-white/10 rounded-2xl p-6">
-              <h2 style={{ fontFamily: 'Georgia, serif' }} className="text-white text-xl font-bold mb-4">
+            <div className="bg-[#1a1a2e] rounded-xl p-6 border border-white/10">
+              <h2 className="text-white text-xl font-bold mb-3">
                 🎯 Target Customers
               </h2>
               <div className="flex flex-wrap gap-2">
-                {targetCustomers.map((c, i) => (
-                  <span key={i} className="px-4 py-2 rounded-full bg-orange-500/10 border border-orange-500/20 text-orange-300 text-sm font-medium">
-                    {c}
-                  </span>
-                ))}
+                {targetCustomers.length > 0 ? (
+                  targetCustomers.map((c, i) => (
+                    <span
+                      key={i}
+                      className="px-3 py-1 rounded-full bg-orange-500/10 text-orange-300 text-sm"
+                    >
+                      {c}
+                    </span>
+                  ))
+                ) : (
+                  <p className="text-white/40 text-sm">No target customers specified.</p>
+                )}
               </div>
             </div>
 
             {/* Pricing */}
-            <div className="bg-[#1a1a2e] border border-white/10 rounded-2xl p-6">
-              <h2 style={{ fontFamily: 'Georgia, serif' }} className="text-white text-xl font-bold mb-4">
-                💵 Suggested Pricing
+            <div className="bg-[#1a1a2e] rounded-xl p-6 border border-white/10">
+              <h2 className="text-white text-xl font-bold mb-3">
+                💵 Pricing
               </h2>
               <div className="grid grid-cols-3 gap-3">
                 {[
-                  { label: 'Per unit', value: pricing.perUnit },
-                  { label: 'Weekly plan', value: pricing.weeklyPlan },
-                  { label: 'Monthly plan', value: pricing.monthlyPlan },
+                  { label: "Per unit", value: pricing.perUnit },
+                  { label: "Weekly", value: pricing.weeklyPlan },
+                  { label: "Monthly", value: pricing.monthlyPlan },
                 ].map((p) => (
-                  <div key={p.label} className="bg-[#0f0f1f] rounded-xl p-4 text-center border border-white/5">
-                    <div className="text-orange-400 text-2xl font-bold">₹{Number(p.value).toLocaleString('en-IN')}</div>
+                  <div
+                    key={p.label}
+                    className="bg-[#0f0f1f] rounded-lg p-3 text-center"
+                  >
+                    <div className="text-orange-400 font-bold">
+                      {p.value || "—"}
+                    </div>
                     <div className="text-white/40 text-xs mt-1">{p.label}</div>
                   </div>
                 ))}
@@ -154,194 +199,236 @@ function Results() {
             </div>
 
             {/* Materials */}
-            <div className="bg-[#1a1a2e] border border-white/10 rounded-2xl p-6">
-              <h2 style={{ fontFamily: 'Georgia, serif' }} className="text-white text-xl font-bold mb-4">
+            <div className="bg-[#1a1a2e] rounded-xl p-6 border border-white/10">
+              <h2 className="text-white text-xl font-bold mb-3">
                 🛒 Materials Needed
               </h2>
-              <div className="space-y-2">
-                {materials.map((m, i) => (
-                  <div key={i} className="flex items-center gap-3 py-2 border-b border-white/5 last:border-0">
-                    <span className="text-orange-500 text-lg">•</span>
-                    <span className="text-white/80 text-sm">{m}</span>
-                  </div>
-                ))}
-              </div>
+              {materials.length > 0 ? (
+                materials.map((m, i) => (
+                  <p key={i} className="text-white/70 text-sm">
+                    • {m}
+                  </p>
+                ))
+              ) : (
+                <p className="text-white/40 text-sm">No materials specified.</p>
+              )}
+            </div>
+
+            {/* Launch Plan */}
+            <div className="bg-[#1a1a2e] rounded-xl p-6 border border-white/10">
+              <h2 className="text-white text-xl font-bold mb-3">
+                🚀 First Week Launch Plan
+              </h2>
+              {Object.keys(firstWeekPlan).length > 0 ? (
+                Object.entries(firstWeekPlan).map(([day, task]) => (
+                  <p key={day} className="text-white/70 text-sm">
+                    <span className="text-orange-400 capitalize font-semibold">
+                      {day}
+                    </span>{" "}
+                    — {task}
+                  </p>
+                ))
+              ) : (
+                <p className="text-white/40 text-sm">No launch plan available.</p>
+              )}
+            </div>
+
+            {/* Marketing Tips */}
+            <div className="bg-[#1a1a2e] rounded-xl p-6 border border-white/10">
+              <h2 className="text-white text-xl font-bold mb-3">
+                📣 Marketing Tips
+              </h2>
+              {localMarketingTips.length > 0 ? (
+                localMarketingTips.map((tip, i) => (
+                  <p key={i} className="text-white/70 text-sm">
+                    • {tip}
+                  </p>
+                ))
+              ) : (
+                <p className="text-white/40 text-sm">No marketing tips available.</p>
+              )}
+            </div>
+
+            {/* Market Insight */}
+            <div className="bg-[#1a1a2e] rounded-xl p-6 border border-white/10">
+              <h2 className="text-white text-xl font-bold mb-3">
+                🧠 Market Insight
+              </h2>
+              <p className="text-white/70 text-sm">
+                {competitorLandscape || "No market insight available."}
+              </p>
             </div>
           </div>
         )}
 
-        {/* ── TAB: FINANCIALS ── */}
-        {activeTab === 'financials' && (
+        {/* FINANCIALS */}
+        {activeTab === "financials" && (
           <div className="space-y-4">
-            <div className="bg-[#1a1a2e] border border-white/10 rounded-2xl p-6">
-              <h2 style={{ fontFamily: 'Georgia, serif' }} className="text-white text-xl font-bold mb-6">
-                📊 Financial Breakdown
+            {/* Financial Overview */}
+            <div className="bg-[#1a1a2e] rounded-xl p-6 border border-white/10">
+              <h2 className="text-white text-xl font-bold mb-4">
+                💰 Financial Overview
               </h2>
-              <div className="space-y-5">
-                {[
-                  { label: 'Total startup investment', value: `₹${Number(startupCost).toLocaleString('en-IN')}`, bar: 100, color: 'bg-orange-500' },
-                  { label: 'Profit per sale', value: `₹${Number(profitPerSale).toLocaleString('en-IN')}`, bar: Math.min((profitPerSale / startupCost) * 100 * 5, 100), color: 'bg-green-500' },
-                  { label: 'Sales needed to break even', value: `${breakEvenSales} sales`, bar: Math.min(100 - (breakEvenSales / 100) * 10, 90), color: 'bg-blue-500' },
-                ].map((item) => (
-                  <div key={item.label}>
-                    <div className="flex justify-between mb-2">
-                      <span className="text-white/60 text-sm">{item.label}</span>
-                      <span className="text-white font-semibold text-sm">{item.value}</span>
-                    </div>
-                    <div className="h-2 bg-white/10 rounded-full overflow-hidden">
-                      <div className={`h-full ${item.color} rounded-full transition-all`} style={{ width: `${item.bar}%` }} />
-                    </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="bg-[#0f0f1f] rounded-lg p-4">
+                  <div className="text-white/40 text-sm mb-1">Startup Cost</div>
+                  <div className="text-orange-400 text-2xl font-bold">
+                    {startupCost || "—"}
                   </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Reality check */}
-            <div className="bg-[#1a1a2e] border border-orange-500/20 rounded-2xl p-6">
-              <h2 style={{ fontFamily: 'Georgia, serif' }} className="text-white text-xl font-bold mb-2">
-                🔍 Reality Check
-              </h2>
-              <p className="text-white/50 text-sm mb-4">Based on 10 sales/week estimate</p>
-              <div className="grid grid-cols-2 gap-3">
-                {[
-                  { label: 'Monthly revenue', value: `₹${(profitPerSale * 2.5 * 10 * 4).toLocaleString('en-IN')}` },
-                  { label: 'Monthly profit', value: `₹${Math.max(0, (profitPerSale * 10 * 4) - (startupCost / 6)).toLocaleString('en-IN')}` },
-                  { label: 'Break-even in weeks', value: `~${Math.ceil(startupCost / (profitPerSale * 10))} weeks` },
-                  { label: 'Yearly potential', value: `₹${(profitPerSale * 10 * 52).toLocaleString('en-IN')}` },
-                ].map((r) => (
-                  <div key={r.label} className="bg-[#0f0f1f] rounded-xl p-4 border border-white/5">
-                    <div className="text-green-400 text-lg font-bold">{r.value}</div>
-                    <div className="text-white/40 text-xs mt-1">{r.label}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ── TAB: CHECKLIST ── */}
-        {activeTab === 'checklist' && (
-          <div className="bg-[#1a1a2e] border border-white/10 rounded-2xl p-6">
-            <div className="flex items-center justify-between mb-2">
-              <h2 style={{ fontFamily: 'Georgia, serif' }} className="text-white text-xl font-bold">
-                ✅ Startup Checklist
-              </h2>
-              <span className="text-orange-400 text-sm font-semibold">{checked.size}/{startupChecklist.length} done</span>
-            </div>
-
-            {/* Progress bar */}
-            <div className="h-2 bg-white/10 rounded-full overflow-hidden mb-6">
-              <div className="h-full bg-green-500 rounded-full transition-all duration-500"
-                style={{ width: `${checklistProgress}%` }} />
-            </div>
-
-            {checklistProgress === 100 && (
-              <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-4 mb-4 text-center">
-                <p className="text-green-400 font-semibold">🎉 You're ready to launch!</p>
-              </div>
-            )}
-
-            <div className="space-y-2">
-              {startupChecklist.map((item, i) => (
-                <div key={i} onClick={() => toggleChecklist(i)}
-                  className={`flex items-start gap-3 p-3 rounded-xl cursor-pointer transition-all border
-                    ${checked.has(i)
-                      ? 'bg-green-500/5 border-green-500/20'
-                      : 'bg-[#0f0f1f] border-white/5 hover:border-orange-500/20'}`}>
-                  <div className={`mt-0.5 w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition-all
-                    ${checked.has(i) ? 'bg-green-500 border-green-500' : 'border-white/20'}`}>
-                    {checked.has(i) && <span className="text-white text-xs font-bold">✓</span>}
-                  </div>
-                  <span className={`text-sm leading-relaxed ${checked.has(i) ? 'text-white/30 line-through' : 'text-white/80'}`}>
-                    {item}
-                  </span>
                 </div>
-              ))}
+                <div className="bg-[#0f0f1f] rounded-lg p-4">
+                  <div className="text-white/40 text-sm mb-1">Profit per Sale</div>
+                  <div className="text-orange-400 text-2xl font-bold">
+                    {profitPerSale || "—"}
+                  </div>
+                </div>
+                <div className="bg-[#0f0f1f] rounded-lg p-4">
+                  <div className="text-white/40 text-sm mb-1">
+                    Break-even Sales
+                  </div>
+                  <div className="text-orange-400 text-2xl font-bold">
+                    {breakEvenSales || "—"} sales
+                  </div>
+                </div>
+                <div className="bg-[#0f0f1f] rounded-lg p-4">
+                  <div className="text-white/40 text-sm mb-1">
+                    Weekly Time Commitment
+                  </div>
+                  <div className="text-orange-400 text-2xl font-bold">
+                    {weeklyTimeCommitment || "—"}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Pricing Details */}
+            <div className="bg-[#1a1a2e] rounded-xl p-6 border border-white/10">
+              <h2 className="text-white text-xl font-bold mb-4">
+                💵 Pricing Strategy
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {[
+                  { label: "Per Unit", value: pricing.perUnit },
+                  { label: "Weekly Plan", value: pricing.weeklyPlan },
+                  { label: "Monthly Plan", value: pricing.monthlyPlan },
+                ].map((p) => (
+                  <div
+                    key={p.label}
+                    className="bg-[#0f0f1f] rounded-lg p-4 text-center"
+                  >
+                    <div className="text-white/40 text-sm mb-2">{p.label}</div>
+                    <div className="text-orange-400 text-xl font-bold">
+                      {p.value || "—"}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         )}
 
-        {/* ── TAB: BRAND KIT ── */}
-        {activeTab === 'brand kit' && (
+        {/* CHECKLIST */}
+        {activeTab === "checklist" && (
+          <div className="bg-[#1a1a2e] rounded-xl p-6 border border-white/10">
+            <h2 className="text-white text-xl font-bold mb-4">
+              Startup Checklist
+            </h2>
+            {startupChecklist.length > 0 ? (
+              startupChecklist.map((item, i) => (
+                <div
+                  key={i}
+                  onClick={() => toggleChecklist(i)}
+                  className="flex gap-3 py-2 cursor-pointer hover:bg-white/5 rounded-lg transition-colors"
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked.has(i)}
+                    readOnly
+                    className="cursor-pointer"
+                  />
+                  <span className="text-white/80 text-sm">{item}</span>
+                </div>
+              ))
+            ) : (
+              <p className="text-white/40 text-sm">No checklist items available.</p>
+            )}
+            <div className="mt-4 text-orange-400 text-sm">
+              Progress: {checklistProgress}%
+            </div>
+          </div>
+        )}
+
+        {/* BRAND KIT */}
+        {activeTab === "brand kit" && (
           <div className="space-y-4">
-
-            {/* Brand name */}
-            <div className="bg-[#1a1a2e] border border-white/10 rounded-2xl p-6">
-              <h2 style={{ fontFamily: 'Georgia, serif' }} className="text-white text-xl font-bold mb-4">
-                ✨ Your Brand Name
+            <div className="bg-[#1a1a2e] rounded-xl p-6 border border-white/10">
+              <h2 className="text-white text-xl font-bold mb-3">
+                Instagram Bio
               </h2>
-              <div className="bg-[#0f0f1f] rounded-xl p-6 text-center border border-orange-500/20 mb-4">
-                <p style={{ fontFamily: 'Georgia, serif' }} className="text-4xl font-bold text-orange-400">
-                  {businessName}
-                </p>
-                <p className="text-white/40 text-sm mt-2 italic">{tagline}</p>
-              </div>
-              <button onClick={() => copyText(businessName, 'name')}
-                className="w-full bg-orange-500 hover:bg-orange-400 text-white font-bold py-3 rounded-2xl transition-all">
-                {copied === 'name' ? '✓ Copied!' : 'Copy Brand Name'}
+              <p className="text-white/80 mb-4">
+                {instaBio || "No Instagram bio available."}
+              </p>
+              <button
+                onClick={() => copyText(instaBio, "insta")}
+                className="bg-orange-500 hover:bg-orange-600 px-4 py-2 rounded-lg text-white transition-colors disabled:opacity-50"
+                disabled={!instaBio}
+              >
+                {copied === "insta" ? "Copied!" : "Copy Bio"}
               </button>
             </div>
 
-            {/* Instagram bio */}
-            <div className="bg-[#1a1a2e] border border-white/10 rounded-2xl p-6">
-              <div className="flex items-center gap-2 mb-4">
-                <span className="text-2xl">📸</span>
-                <h2 style={{ fontFamily: 'Georgia, serif' }} className="text-white text-xl font-bold">
-                  Instagram Bio
-                </h2>
-              </div>
-              <div className="bg-[#0f0f1f] rounded-xl p-4 border border-white/5 mb-4">
-                <p className="text-white/80 text-sm leading-relaxed whitespace-pre-line font-mono">
-                  {instaBio}
-                </p>
-              </div>
-              <button onClick={() => copyText(instaBio, 'insta')}
-                className="w-full bg-orange-500 hover:bg-orange-400 text-white font-bold py-3 rounded-2xl transition-all">
-                {copied === 'insta' ? '✓ Copied!' : 'Copy Instagram Bio'}
-              </button>
-            </div>
-
-            {/* WhatsApp pitch */}
-            <div className="bg-[#1a1a2e] border border-white/10 rounded-2xl p-6">
-              <div className="flex items-center gap-2 mb-4">
-                <span className="text-2xl">💬</span>
-                <h2 style={{ fontFamily: 'Georgia, serif' }} className="text-white text-xl font-bold">
-                  WhatsApp Pitch
-                </h2>
-              </div>
-              <div className="bg-[#0f0f1f] rounded-xl p-4 border border-white/5 mb-4">
-                <p className="text-white/80 text-sm leading-relaxed whitespace-pre-line">
-                  {whatsappPitch}
-                </p>
-              </div>
+            <div className="bg-[#1a1a2e] rounded-xl p-6 border border-white/10">
+              <h2 className="text-white text-xl font-bold mb-3">
+                WhatsApp Pitch
+              </h2>
+              <p className="text-white/80 mb-4">
+                {whatsappPitch || "No WhatsApp pitch available."}
+              </p>
               <div className="flex gap-3">
-                <button onClick={() => copyText(whatsappPitch, 'wa')}
-                  className="flex-1 border border-white/20 hover:border-orange-500/40 text-white/70 font-semibold py-3 rounded-2xl transition-all text-sm">
-                  {copied === 'wa' ? '✓ Copied!' : 'Copy pitch'}
+                <button
+                  onClick={() => copyText(whatsappPitch, "wa")}
+                  className="bg-orange-500 hover:bg-orange-600 px-4 py-2 rounded-lg text-white transition-colors disabled:opacity-50"
+                  disabled={!whatsappPitch}
+                >
+                  {copied === "wa" ? "Copied!" : "Copy"}
                 </button>
-                <a href={whatsappUrl} target="_blank" rel="noopener noreferrer"
-                  className="flex-1 bg-green-600 hover:bg-green-500 text-white font-bold py-3 rounded-2xl transition-all text-sm text-center flex items-center justify-center gap-2">
-                  <span>Open WhatsApp</span>
+                <a
+                  href={whatsappUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="bg-green-600 hover:bg-green-700 px-4 py-2 rounded-lg text-white transition-colors disabled:opacity-50"
+                  aria-label="Open WhatsApp with pitch"
+                >
+                  Open WhatsApp
                 </a>
               </div>
             </div>
           </div>
         )}
 
-        {/* ── ACTION BUTTONS ── */}
-        <div className="flex flex-wrap gap-3 justify-end pt-2 pb-6">
-          <button onClick={() => { localStorage.clear(); navigate('/onboarding'); }}
-            className="px-6 py-3 rounded-2xl border border-white/20 text-white/60 text-sm hover:border-orange-500/40 transition-all">
+        {/* ACTION BUTTONS */}
+        <div className="flex gap-3 justify-end">
+          <button
+            onClick={() => {
+              localStorage.clear();
+              navigate("/onboarding");
+            }}
+            className="border border-white/20 hover:border-white/40 px-4 py-2 rounded-lg text-white/60 hover:text-white/80 transition-colors"
+          >
             Start over
           </button>
-          <button onClick={handleSave} disabled={saving || saved}
-            className={`px-6 py-3 rounded-2xl font-bold text-sm transition-all
-              ${saved ? 'bg-green-600 text-white' : 'bg-[#1a1a2e] border border-orange-500/40 text-orange-400 hover:bg-orange-500/10'}`}>
-            {saved ? '✓ Saved!' : saving ? 'Saving...' : '💾 Save Idea'}
+          <button
+            onClick={handleSave}
+            className="bg-orange-500 hover:bg-orange-600 px-4 py-2 rounded-lg text-white transition-colors disabled:opacity-50"
+            disabled={saving || saved}
+          >
+            {saved ? "Saved!" : saving ? "Saving..." : "Save Idea"}
           </button>
-          <button onClick={() => navigate('/dashboard')}
-            className="px-6 py-3 rounded-2xl bg-orange-500 hover:bg-orange-400 text-white font-bold text-sm transition-all">
-            View Dashboard →
+          <button
+            onClick={() => navigate("/dashboard")}
+            className="bg-orange-500 hover:bg-orange-600 px-4 py-2 rounded-lg text-white transition-colors"
+          >
+            View Dashboard
           </button>
         </div>
 
